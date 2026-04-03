@@ -17,7 +17,7 @@ Download from [Releases](https://github.com/jiiro974/pafw-releases/releases), th
 
 ```
 tar xzf pafw-<os>-<arch>.tar.gz
-sudo mv pafw-<os>-<arch>/* /usr/local/bin/
+sudo mv pa* /usr/local/bin/
 ```
 
 ### From source
@@ -28,7 +28,7 @@ go install github.com/jiiro974/pafw/cmd/...@latest
 
 ## Usage
 
-Use `pafw <command>` or standalone binaries (`paping`, `paif`, etc.):
+Use `pafw <command>` or standalone binaries:
 
 ```
 pafw ping --host fw01 --target 8.8.8.8
@@ -48,6 +48,7 @@ paping --host fw01 --target 8.8.8.8      # equivalent
 | `pafw fib` | `pafib` | FIB lookup |
 | `pafw counter` | `pacounter` | Show global counters |
 | `pafw cap` | `pacap` | Packet capture (start/stop/download pcap) |
+| `pafw gp` | `pagp` | GlobalProtect sessions / disconnect |
 
 ## Examples
 
@@ -79,16 +80,22 @@ pafw counter --host fw01 --filter "severity drop"
 
 # Packet capture (Ctrl+C to stop and download)
 pafw cap --host fw01 --src 10.0.0.1 --dport 443 --proto 6
+
+# GlobalProtect: list sessions
+pafw gp --host fw01
+
+# GlobalProtect: disconnect a user
+pafw gp --host fw01 --gateway gw01 --gp-user joe --computer PC01
 ```
 
 ## Authentication
 
 Tried in order:
 
-1. **Keeper Secrets Manager**: `--keeper-secret "fw-admin"` (set `KEEPER_TOKEN` env or `--keeper-token`)
-2. **SSH key file**: `--key ~/.ssh/id_rsa`
-3. **Password flag**: `--password secret`
-4. **SSH agent**: auto-detected via `SSH_AUTH_SOCK` (default)
+1. **SSH agent**: auto-detected via `SSH_AUTH_SOCK` (default)
+2. **Keeper Secrets Manager**: `--keeper-secret "fw-admin"` (set `KEEPER_TOKEN` env or `--keeper-token`)
+3. **SSH key file**: `--key ~/.ssh/id_rsa`
+4. **Password flag**: `--password secret`
 5. **Interactive prompt**: asks for password if nothing else works
 
 ## Common flags
