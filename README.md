@@ -1,6 +1,6 @@
 # pafw
 
-CLI tools for Palo Alto Networks firewalls. Each command connects via SSH, runs the equivalent PAN-OS CLI command, and streams output to your terminal. Ctrl+C stops interactive commands cleanly.
+CLI tools for Palo Alto Networks firewalls. Single multicall binary (~7MB) with symlinks — archive ~3MB. Connects via SSH, streams output in real-time. Ctrl+C stops interactive commands cleanly.
 
 ## Install
 
@@ -20,25 +20,29 @@ tar xzf pafw-<os>-<arch>.tar.gz
 sudo mv pa* /usr/local/bin/
 ```
 
-### From source
+### Shell completion
 
-```
-go install github.com/jiiro974/pafw/cmd/...@latest
+```bash
+# zsh
+pafw completion zsh > ~/.zsh/completions/_pafw
+
+# bash
+pafw completion bash > ~/.local/share/bash-completion/completions/pafw
 ```
 
 ## Usage
 
-Use `pafw <command>` or standalone binaries:
+Use `pafw <command>` or standalone symlinks:
 
 ```
 pafw ping --host fw01 --target 8.8.8.8
-paping --host fw01 --target 8.8.8.8      # equivalent
+paping --host fw01 --target 8.8.8.8      # same thing
 ```
 
 ## Commands
 
-| Command | Standalone | Description |
-|---------|------------|-------------|
+| Command | Symlink | Description |
+|---------|---------|-------------|
 | `pafw ping` | `paping` | Ping from firewall |
 | `pafw trace` | `patrace` | Traceroute from firewall |
 | `pafw if` | `paif` | Show interfaces |
@@ -76,67 +80,44 @@ paarp --host fw01 --json
 # Clear all ARP
 paarp clear all --host fw01
 
-# Clear by interface
-paarp clear ethernet1/1 --host fw01
-
 # Clear by IP or MAC (auto-detects interface)
 paarp clear --ip 10.0.0.1 --host fw01
 paarp clear --mac 00:1a:2b:3c:4d:5e --host fw01
 
-# Clear by IP/MAC on specific interface
+# Clear on specific interface
 paarp clear ethernet1/1 --ip 10.0.0.1 --host fw01
 ```
 
 ## Output formats
 
-All commands support `--raw` (raw firewall output) and most support `--json`:
-
 ```bash
-pafw gp --host fw01               # formatted table
+pafw gp --host fw01               # formatted table (default)
 pafw gp --host fw01 --raw         # raw PAN-OS output
 pafw gp --host fw01 --json        # structured JSON
-pafw route --host fw01 --json     # routes as JSON
-pafw arp --host fw01 --json       # ARP as JSON
 ```
+
+`--json` supported on: gp, if, route, arp, session
 
 ## More examples
 
 ```bash
-# Ping from firewall
 pafw ping --host fw01 --target 8.8.8.8 --source 10.0.0.1 --count 10
-
-# Traceroute with logical router
 pafw trace --host fw01 --target 8.8.8.8 --lr MyLR
-
-# Show interfaces
-pafw if --host fw01
 pafw if --host fw01 --name ethernet1/1
-
-# Routing table
 pafw route --host fw01 --vr default
-
-# Sessions
 pafw session --host fw01 --src 192.168.1.100 --dport 443
-
-# FIB lookup
 pafw fib --host fw01 --ip 8.8.8.8 --vr default
-
-# Global counters (drops only)
 pafw counter --host fw01 --filter "severity drop"
-
-# Packet capture (Ctrl+C to stop and download)
 pafw cap --host fw01 --src 10.0.0.1 --dport 443 --proto 6
 ```
 
 ## Authentication
 
-Tried in order:
-
 1. **SSH agent**: auto-detected via `SSH_AUTH_SOCK` (default)
-2. **Keeper Secrets Manager**: `--keeper-secret "fw-admin"` (set `KEEPER_TOKEN` env or `--keeper-token`)
+2. **Keeper Secrets Manager**: `--keeper-secret "fw-admin"`
 3. **SSH key file**: `--key ~/.ssh/id_rsa`
 4. **Password flag**: `--password secret`
-5. **Interactive prompt**: asks for password if nothing else works
+5. **Interactive prompt**: fallback
 
 ## Common flags
 
@@ -145,7 +126,6 @@ Tried in order:
 --user       Username (default: OS login)
 --password   Password
 --key        SSH private key file
---insecure   Skip TLS verification (default: true)
 --json       Structured JSON output
 --raw        Raw firewall output
 --vr         Virtual router (ping, trace, route, fib)
