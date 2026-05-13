@@ -55,6 +55,7 @@ pafw completion bash > ~/.local/share/bash-completion/completions/pafw
 | `pafw counter` | `pacounter` | Show global counters |
 | `pafw cap` | `pacap` | Packet capture |
 | `pafw gp` | `pagp` | GlobalProtect sessions / disconnect |
+| `pafw log` | `palog` | Extract activity logs (traffic / GlobalProtect) |
 
 ## Examples
 
@@ -86,6 +87,43 @@ pafw fib --host fw01 --ip 8.8.8.8
 pafw counter --host fw01 --filter "severity drop"
 ```
 
+## Log extraction
+
+Query traffic or GlobalProtect logs over a time period. Output is pure JSON when `--json` is set, ready to pipe into `jq`.
+
+```bash
+# Last 24h traffic for a machine
+palog --host fw01 --src 10.0.0.42 --last 24h --json | jq '.[] | {time,dst_ip,app}'
+
+# Denied traffic over a date range
+palog --host fw01 --action deny --from 2025-05-01 --to 2025-05-07 --json
+
+# All traffic for a user
+palog --host fw01 --filter-user jdoe --last 7d --json | jq '.[] | select(.action=="deny")'
+
+# GlobalProtect connections
+palog --host fw01 --type globalprotect --filter-user jdoe --last 7d
+palog --host fw01 --type globalprotect --src 203.0.113.5 --last 30d --json
+
+# Increase result limit (default 1000)
+palog --host fw01 --src 10.0.0.1 --last 24h --limit 5000 --json
+```
+
+### Log filters
+
+| Flag | Description |
+|------|-------------|
+| `--type` | `traffic` (default) or `globalprotect` |
+| `--src` | Source IP or subnet |
+| `--dst` | Destination IP (traffic only) |
+| `--filter-user` | Username (User-ID / GlobalProtect) |
+| `--app` | Application: `ssl`, `web-browsing`, … |
+| `--action` | `allow` or `deny` |
+| `--last` | Time window: `24h`, `7d`, `30d` (default: `24h`) |
+| `--from` | Start date `YYYY-MM-DD` |
+| `--to` | End date `YYYY-MM-DD` |
+| `--limit` | Max entries (default: 1000) |
+
 ## Output formats
 
 ```bash
@@ -93,6 +131,8 @@ pafw gp --host fw01               # formatted table
 pafw gp --host fw01 --raw         # raw PAN-OS output
 pafw gp --host fw01 --json        # structured JSON
 ```
+
+`--json` supported on: gp, if, route, arp, session, log
 
 ## Authentication
 
