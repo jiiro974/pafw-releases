@@ -26,7 +26,6 @@ Download `pafw-windows-amd64.zip`, extract, and add the folder to your PATH.
 Download from [Releases](https://github.com/jiiro974/pafw-releases/releases):
 
 ```bash
-# Unix
 tar xzf pafw-<os>-<arch>.tar.gz
 sudo mv pa* /usr/local/bin/
 ```
@@ -50,89 +49,73 @@ pafw completion bash > ~/.local/share/bash-completion/completions/pafw
 | `pafw if` | `paif` | Show interfaces |
 | `pafw route` | `paroute` | Show routing table |
 | `pafw arp` | `paarp` | Show / clear ARP table |
-| `pafw session` | `pasession` | Show sessions |
+| `pafw session` | `pasession` | Show / filter active sessions |
 | `pafw fib` | `pafib` | FIB lookup |
 | `pafw counter` | `pacounter` | Show global counters |
 | `pafw cap` | `pacap` | Packet capture |
 | `pafw gp` | `pagp` | GlobalProtect sessions / disconnect |
 | `pafw log` | `palog` | Extract activity logs (traffic / GlobalProtect) |
 
-## Examples
+All commands support `--json` for structured output pipeable to `jq`.
+
+## JSON output examples
 
 ```bash
-# Ping / traceroute
-pafw ping --host fw01 --target 8.8.8.8 --count 10
-pafw trace --host fw01 --target 8.8.8.8 --lr MyLR
+# Ping — RTT stats and per-reply detail
+paping --host fw01 --target 8.8.8.8 --json | jq '{target, loss_pct, rtt_avg_ms}'
 
-# Show / JSON
-pafw if --host fw01 --json
-pafw route --host fw01 --vr default --json
-pafw arp --host fw01 --json
-pafw session --host fw01 --src 10.0.0.1
+# Traceroute — per-hop breakdown
+patrace --host fw01 --target 8.8.8.8 --json | jq '.hops[] | select(.timeout==false) | {hop, ip, rtt_ms}'
 
-# GlobalProtect
-pagp --host fw01                                    # list sessions
-pagp disconnect user toto --host fw01               # disconnect user
-pagp disconnect all --host fw01 --gateway gw01      # disconnect all
+# Active sessions — filter by user, app, state
+pasession --host fw01 --filter-user domain\\jdoe --json | jq '.[] | {id, app, state, dst_ip, dst_port}'
+pasession --host fw01 --src 10.0.0.42 --json | jq '.[] | select(.state=="ACTIVE")'
 
-# ARP management
-paarp clear --ip 10.0.0.1 --host fw01              # auto-detect interface
-paarp clear --mac 00:1a:2b:3c:4d:5e --host fw01
+# Global counters — non-zero drops only
+pacounter --host fw01 --filter "severity drop" --json | jq '.[] | select(.value > 0) | {name, value}'
 
-# Packet capture (Ctrl+C to stop)
-pafw cap --host fw01 --src 10.0.0.1 --dport 443 --proto 6
+# FIB lookup
+pafib --host fw01 --ip 8.8.8.8 --json | jq '.entries[] | {nexthop, interface, metric}'
 
-# FIB lookup / counters
-pafw fib --host fw01 --ip 8.8.8.8
-pafw counter --host fw01 --filter "severity drop"
+# Traffic logs
+palog --host fw01 --src 10.0.0.42 --last 24h --json | jq '.[] | {time, dst_ip, app, action}'
+palog --host fw01 --action deny --last 7d --json | jq '.[] | select(.app=="ssl")'
+
+# GlobalProtect logs
+palog --host fw01 --type globalprotect --filter-user jdoe --last 7d --json
 ```
 
-## Log extraction
-
-Query traffic or GlobalProtect logs over a time period. Output is pure JSON when `--json` is set, ready to pipe into `jq`.
+## Session filters
 
 ```bash
-# Last 24h traffic for a machine
-palog --host fw01 --src 10.0.0.42 --last 24h --json | jq '.[] | {time,dst_ip,app}'
-
-# Denied traffic over a date range
-palog --host fw01 --action deny --from 2025-05-01 --to 2025-05-07 --json
-
-# All traffic for a user
-palog --host fw01 --filter-user jdoe --last 7d --json | jq '.[] | select(.action=="deny")'
-
-# GlobalProtect connections
-palog --host fw01 --type globalprotect --filter-user jdoe --last 7d
-palog --host fw01 --type globalprotect --src 203.0.113.5 --last 30d --json
-
-# Increase result limit (default 1000)
-palog --host fw01 --src 10.0.0.1 --last 24h --limit 5000 --json
+pasession --host fw01 --src 10.0.0.42
+pasession --host fw01 --filter-user domain\\jdoe
+pasession --host fw01 --proto 6 --state ACTIVE
+pasession --host fw01 --from LAN --to Internet
 ```
 
-### Log filters
+| Flag | Description |
+|------|-------------|
+| `--src` / `--dst` | Source / destination IP |
+| `--sport` / `--dport` | Source / destination port |
+| `--proto` | IP protocol (6=TCP, 17=UDP, 1=ICMP) |
+| `--application` | Application name |
+| `--filter-user` | Source user (User-ID) |
+| `--state` | ACTIVE, INIT, OPENING, CLOSING |
+| `--from` / `--to` | Source / destination security zone |
+
+## Log extraction filters
 
 | Flag | Description |
 |------|-------------|
 | `--type` | `traffic` (default) or `globalprotect` |
-| `--src` | Source IP or subnet |
-| `--dst` | Destination IP (traffic only) |
+| `--src` / `--dst` | Source / destination IP |
 | `--filter-user` | Username (User-ID / GlobalProtect) |
-| `--app` | Application: `ssl`, `web-browsing`, … |
+| `--app` | Application name |
 | `--action` | `allow` or `deny` |
-| `--last` | Time window: `24h`, `7d`, `30d` (default: `24h`) |
-| `--from` | Start date `YYYY-MM-DD` |
-| `--to` | End date `YYYY-MM-DD` |
+| `--last` | `24h`, `7d`, `30d` (default: `24h`) |
+| `--from` / `--to` | Date range `YYYY-MM-DD` |
 | `--limit` | Max entries (default: 1000) |
-
-## Output formats
-
-```bash
-pafw gp --host fw01               # formatted table
-pafw gp --host fw01 --raw         # raw PAN-OS output
-pafw gp --host fw01 --json        # structured JSON
-```
-
-`--json` supported on: gp, if, route, arp, session, log
 
 ## Authentication
 
@@ -149,7 +132,7 @@ pafw gp --host fw01 --json        # structured JSON
 --user       Username (default: OS login)
 --password   Password
 --key        SSH private key file
---json       Structured JSON output
+--json       Structured JSON output (all commands)
 --raw        Raw firewall output
 --vr         Virtual router
 --lr         Logical router
